@@ -1,0 +1,27 @@
+# Only the migration runner of the database catalog. The MongoDB instance is shared
+# and is defined in property-infra-mongo; property-infra-postgres includes both files
+# (Annex J.2, J.7; ADR-008). This repository defines no database service and no volume.
+
+services:
+  catalog-db-migrate:
+    build:
+      context: .
+      dockerfile: liquibase.Dockerfile
+    profiles: [tooling]             # migrating is a deliberate act: `up` never starts it
+    volumes:
+      - ../:/workspace:ro
+    # The administrator of the instance creates the collections and the roles; the
+    # service never uses it. Liquibase keeps its own collections inside catalog.
+    entrypoint: ["liquibase",
+      "--search-path=/workspace",
+      "--changelog-file=changelog/changelog-master.yaml",
+      "--url=mongodb://mongo:27017/catalog?authSource=admin&replicaSet=rs0",
+      "--username=${MONGO_ADMIN_USER:?set MONGO_ADMIN_USER}",
+      "--password=${MONGO_ADMIN_PASSWORD:?set MONGO_ADMIN_PASSWORD}"]
+    command: ["update"]
+    networks: [platform]
+
+networks:
+  platform:
+    name: platform
+    external: true
