@@ -1,0 +1,87 @@
+# Each collection is created with its validator (Annex B): the structure lives in the
+# $jsonSchema of 06-data/models.md, strict and error. A later change to a validator is a
+# new changeset with collMod in 01_validators/, never an edit of these.
+databaseChangeLog:
+  - changeSet:
+      id: ddl-collections-001
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,ddl,collections"
+      comment: "properties: the denormalized read model of the search and the detail."
+      changes:
+        - createCollection:
+            collectionName: properties
+            options: |
+              {
+                "validationLevel": "strict",
+                "validationAction": "error",
+                "validator": { "$jsonSchema": {
+                  "bsonType": "object",
+                  "required": ["_id", "title", "city", "country", "host", "capacity", "amenities", "photos",
+                               "pricePerNightCents", "currency", "unavailableRanges", "createdAt", "updatedAt"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "_id":                { "bsonType": "string" },
+                    "title":              { "bsonType": "string", "maxLength": 120 },
+                    "city":               { "bsonType": "string" },
+                    "country":            { "bsonType": "string" },
+                    "address":            { "bsonType": "string" },
+                    "geo":                { "bsonType": "object", "required": ["type", "coordinates"],
+                                            "additionalProperties": false,
+                                            "properties": { "type":        { "enum": ["Point"] },
+                                                            "coordinates": { "bsonType": "array", "minItems": 2, "maxItems": 2,
+                                                                             "items": { "bsonType": "double" } } } },
+                    "host":               { "bsonType": "object", "required": ["id", "displayName"],
+                                            "additionalProperties": false,
+                                            "properties": { "id":          { "bsonType": "string" },
+                                                            "displayName": { "bsonType": "string" },
+                                                            "hostSince":   { "bsonType": "int" } } },
+                    "capacity":           { "bsonType": "int", "minimum": 1, "maximum": 20 },
+                    "bedrooms":           { "bsonType": "int", "minimum": 0 },
+                    "bathrooms":          { "bsonType": "int", "minimum": 0 },
+                    "areaM2":             { "bsonType": "int", "minimum": 1 },
+                    "amenities":          { "bsonType": "array", "maxItems": 30, "items": { "bsonType": "string" } },
+                    "photos":             { "bsonType": "array", "maxItems": 30, "items": { "bsonType": "string" } },
+                    "pricePerNightCents": { "bsonType": "long", "minimum": 1 },
+                    "currency":           { "enum": ["COP"] },
+                    "rating":             { "bsonType": "double", "minimum": 0, "maximum": 5 },
+                    "unavailableRanges":  { "bsonType": "array", "maxItems": 500, "items": {
+                                            "bsonType": "object", "required": ["reservationId", "startDate", "endDate"],
+                                            "additionalProperties": false,
+                                            "properties": { "reservationId": { "bsonType": "string" },
+                                                            "startDate":     { "bsonType": "string" },
+                                                            "endDate":       { "bsonType": "string" } } } },
+                    "createdAt":          { "bsonType": "date" },
+                    "updatedAt":          { "bsonType": "date" }
+                  }
+                } }
+              }
+      rollback:
+        - dropCollection:
+            collectionName: properties
+
+  - changeSet:
+      id: ddl-collections-002
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,ddl,collections"
+      comment: "processed_events: the eventId of every Booking event already applied, so a redelivery changes nothing."
+      changes:
+        - createCollection:
+            collectionName: processed_events
+            options: |
+              {
+                "validationLevel": "strict",
+                "validationAction": "error",
+                "validator": { "$jsonSchema": {
+                  "bsonType": "object",
+                  "required": ["_id", "eventType", "processedAt"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "_id":         { "bsonType": "string" },
+                    "eventType":   { "enum": ["ReservaCreada", "ReservaConfirmada", "ReservaCancelada", "ReservaExpirada"] },
+                    "processedAt": { "bsonType": "date" }
+                  }
+                } }
+              }
+      rollback:
+        - dropCollection:
+            collectionName: processed_events
