@@ -1,0 +1,57 @@
+name: Database rebuild
+
+# The whole changelog must build the database catalog from an EMPTY instance, every
+# rollback must work, and the chain must apply again afterwards (norm 5.2.8, Annex B).
+# The instance is first prepared the way property-infra-mongo prepares it: an
+# administrator and the user catalog_app with no role (Annex J.4, J.7). Here it runs
+# as a standalone mongod: the replica set belongs to property-infra-mongo, and no
+# changeset needs a transaction.
+
+on:
+  pull_request:
+    branches: [develop, qa]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare, apply, test, roll everything back, apply again
+        run: |
+          docker run -d --name mongo -p 27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=ci_admin -e MONGO_INITDB_ROOT_PASSWORD=ci-only mongo:7.0
+          mongosh() {
+            docker exec -i -e CATALOG_APP_PASSWORD=ci-only-app mongo \
+              mongosh --quiet -u ci_admin -p ci-only --authenticationDatabase admin catalog "$@"
+          }
+          for i in $(seq 1 30); do mongosh --eval 'db.hello().ok' >/dev/null 2>&1 && break; sleep 2; done
+          mongosh --eval 'db.createUser({ user: "catalog_app", pwd: "ci-only-app", roles: [] })'
+          docker build -q -t catalog-db-migrate -f deploy/liquibase.Dockerfile deploy
+          lb() {
+            docker run --rm --network host -v "$PWD:/workspace:ro" catalog-db-migrate \
+              --search-path=/workspace --changelog-file=changelog/changelog-master.yaml \
+              "--url=mongodb://localhost:27017/catalog?authSource=admin" \
+              --username=ci_admin --password=ci-only "$@"
+          }
+          lb update
+          lb update | tee second.txt
+          grep -q "Run:  *0" second.txt || { echo "second update applied changes: not incremental"; exit 1; }
+          for test in tests/*.js; do
+            echo "== $test"
+            docker exec -i mongo sh -c 'cat > /tmp/test.js' < "$test"
+            mongosh /tmp/test.js
+          done
+          lb rollback-count 999
+          left=$(mongosh --eval 'print(db.getCollectionNames().filter(c => !c.startsWith("DATABASECHANGELOG")).length
+                                     + db.runCommand({ rolesInfo: 1 }).roles.length
+                                     + db.getUser("catalog_app").roles.length)')
+          [ "$left" = "0" ] || { echo "rollback left collections, roles or grants behind"; exit 1; }
+          lb update
