@@ -1,1 +1,46 @@
-databaseChangeLog: []
+# Least privilege (Annex B, rule 5): roles without a password; the user catalog_app is
+# created by property-infra-mongo. The writer reads, inserts and updates: a property is
+# never deleted, and nobody but the runner changes structure. The reader is granted to
+# nobody: this project has no cross-domain reads (ADR-008, rule 5).
+databaseChangeLog:
+  - changeSet:
+      id: dcl-roles-001
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,dcl,roles"
+      comment: "catalog_reader: find on the two collections of catalog."
+      changes:
+        - runCommand:
+            command: |
+              { "createRole": "catalog_reader", "roles": [], "privileges": [
+                { "resource": { "db": "catalog", "collection": "properties" },       "actions": ["find"] },
+                { "resource": { "db": "catalog", "collection": "processed_events" }, "actions": ["find"] } ] }
+      rollback:
+        - runCommand:
+            command: '{ "dropRole": "catalog_reader" }'
+
+  - changeSet:
+      id: dcl-roles-002
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,dcl,roles"
+      comment: "catalog_writer: find, insert and update on the two collections of catalog. No remove, no structure."
+      changes:
+        - runCommand:
+            command: |
+              { "createRole": "catalog_writer", "roles": [], "privileges": [
+                { "resource": { "db": "catalog", "collection": "properties" },       "actions": ["find", "insert", "update"] },
+                { "resource": { "db": "catalog", "collection": "processed_events" }, "actions": ["find", "insert", "update"] } ] }
+      rollback:
+        - runCommand:
+            command: '{ "dropRole": "catalog_writer" }'
+
+  - changeSet:
+      id: dcl-roles-003
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,dcl,grants"
+      comment: "catalog-api connects as catalog_app, which holds the writer role (Annex J.7)."
+      changes:
+        - runCommand:
+            command: '{ "grantRolesToUser": "catalog_app", "roles": ["catalog_writer"] }'
+      rollback:
+        - runCommand:
+            command: '{ "revokeRolesFromUser": "catalog_app", "roles": ["catalog_writer"] }'
