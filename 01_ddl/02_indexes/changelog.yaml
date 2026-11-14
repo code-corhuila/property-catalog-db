@@ -1,0 +1,33 @@
+# Named indexes, each one serving a real query of catalog-api (Annex B, rule 2).
+databaseChangeLog:
+  - changeSet:
+      id: ddl-indexes-001
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,ddl,indexes"
+      comment: "Geospatial search: properties near a point."
+      changes:
+        - createIndex:
+            collectionName: properties
+            keys: '{ "geo": "2dsphere" }'
+            options: '{ "name": "idx_properties_geo" }'
+      rollback:
+        - dropIndex:
+            collectionName: properties
+            keys: '{ "geo": "2dsphere" }'
+            options: '{ "name": "idx_properties_geo" }'
+
+  - changeSet:
+      id: ddl-indexes-002
+      author: JuanOliveros2497
+      labels: "HU-CAT-001,ddl,indexes"
+      comment: "GET /propiedades?ciudad=...&huespedes=... The city matches ignoring case and accents (E-05), so the index carries the collation the query uses: es, strength 1."
+      changes:
+        - createIndex:
+            collectionName: properties
+            keys: '{ "city": 1, "capacity": 1 }'
+            options: '{ "name": "idx_properties_city_capacity", "collation": { "locale": "es", "strength": 1 } }'
+      rollback:
+        - dropIndex:
+            collectionName: properties
+            keys: '{ "city": 1, "capacity": 1 }'
+            options: '{ "name": "idx_properties_city_capacity" }'
