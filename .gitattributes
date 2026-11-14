@@ -1,0 +1,4 @@
+# Files read inside Linux containers: never let Git convert them to CRLF.
+*.js   text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
