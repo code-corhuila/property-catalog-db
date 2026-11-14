@@ -16,8 +16,8 @@ instance of each environment is defined in `property-infra-mongo` (Annex J, ADR-
 ```
 changelog/changelog-master.yaml   single entry point of the pipeline
 01_ddl/    structure  00_collections (each one with its validator), 01_validators, 02_indexes, 03_views
-02_dml/    data       inserts, updates, deletes, upserts, patches
-03_dcl/    access     00_roles
+02_dml/    data       inserts, updates, deletes, 03_upserts (the 24 initial listings), patches
+03_dcl/    access     00_roles: catalog_reader, catalog_writer and the grant to catalog_app
 tests/                mongosh checks run by the CI after the database is built
 deploy/compose.yml    only the migration runner, catalog-db-migrate
 deploy/liquibase.Dockerfile   Liquibase 4.29 with liquibase-mongodb and the mongodb driver
@@ -37,7 +37,14 @@ every changeset declares its inverse inline (Annex B).
    because the city of E-05 matches ignoring case and accents.
 3. **Each changeset is idempotent by itself:** a single operation, so a failure leaves
    nothing half done. Seeds are upserts.
-4. **Every changeset declares its rollback, and an applied changeset is never edited.**
+4. **Roles have no password.** The user `catalog_app` is created by `property-infra-mongo`
+   with no role; this repository grants it `catalog_writer` (find, insert, update; never
+   remove, never structure).
+5. **Every changeset declares its rollback, and an applied changeset is never edited.**
+6. **The listings are a seed required in every environment** (MVP 1 has no path that
+   creates a property), so it carries no context. They are the rows the portal's mock
+   served, with the same ids. `$setOnInsert` keeps the ranges catalog-api already applied.
+   They have no photos yet.
 
 ## Run it
 
@@ -64,8 +71,9 @@ It prepares an empty MongoDB 7 the way the instance is prepared (an administrato
 `catalog_app` with no role), then: `update` → a second `update` that must apply nothing
 → the checks in `tests/` (the validator rejects a value outside an `enum`, an undeclared
 field, a missing array and an array above `maxItems`, and accepts a valid document; the
-indexes exist) → `rollback-count 999`, which must leave no collection, role or grant →
-`update` again.
+indexes exist; `catalog_app` can only read, insert and update; the 24 listings carry the
+right types) → `rollback-count 999`,
+which must leave no collection, role or grant → `update` again.
 
 ## Branching
 
